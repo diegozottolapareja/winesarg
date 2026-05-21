@@ -14,6 +14,19 @@ import img8 from '../../imports/image-7.png';
 import img9 from '../../imports/image-2.png';
 import logo from '../../imports/ChatGPT_Image_May_20__2026__12_34_00_PM.png';
 
+interface DBWine {
+  id: string;
+  name: string;
+  winery: string;
+  type: string;
+  region: string;
+  price: number;
+  description: string;
+  stock: number;
+  featured: boolean;
+  image_url: string;
+}
+
 const ALL_WINES = [
   {
     id: 1,
@@ -110,19 +123,52 @@ export default function SellerSales() {
   const [showOutOfStockBanner, setShowOutOfStockBanner] = useState(false);
   const observerRef = useRef<HTMLDivElement>(null);
 
-  // Reiniciar el contador cuando cambia la búsqueda
+  const [dbWines, setDbWines] = useState<DBWine[]>([]);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadWinesFromDB = async () => {
+      try {
+        const response = await fetch('/api/wines');
+        const json = await response.json();
+        if (json.success) {
+          setDbWines(json.data);
+        } else {
+          throw new Error(json.error || 'Error cargando catálogo dinámico');
+        }
+      } catch (err) {
+        console.error('Error al conectar con /api/wines:', err);
+        setApiError(err instanceof Error ? err.message : 'Error de base de datos');
+      }
+    };
+    loadWinesFromDB();
+  }, []);
+
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
   }, [searchQuery]);
 
-  const filteredWines = ALL_WINES.filter(wine => {
+  // Convertimos los IDs de la DB a números correlativos altos (ej: 100, 101...) para no romper useCart
+  const formattedDBWines = dbWines.map((wine, index) => ({
+    id: 100 + index, 
+    name: wine.name,
+    year: 2026, 
+    category: wine.type,
+    price: Number(wine.price),
+    stock: wine.stock,
+    image: wine.image_url || img1, 
+    isDynamic: true, 
+  }));
+
+  const COMBINED_CATALOG = [...ALL_WINES, ...formattedDBWines];
+
+  const filteredWines = COMBINED_CATALOG.filter(wine => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase().trim();
-    const searchTerms = query.split(/\s+/); // Dividir por espacios
+    const searchTerms = query.split(/\s+/);
 
     const searchableText = `${wine.name} ${wine.category} ${wine.year}`.toLowerCase();
 
-    // Verificar que TODAS las palabras de búsqueda estén presentes
     return searchTerms.every(term => searchableText.includes(term));
   });
 
@@ -157,16 +203,14 @@ export default function SellerSales() {
   }, [hasMore, isLoading, filteredWines.length]);
 
   const updateQuantity = (wineId: number, change: number) => {
-    const wine = ALL_WINES.find(w => w.id === wineId);
+    const wine = COMBINED_CATALOG.find(w => w.id === wineId);
     if (!wine) return;
 
     const current = getItemQuantity(wineId);
     const newValue = current + change;
 
-    // No permitir valores negativos
     if (newValue < 0) return;
 
-    // Verificar que no exceda el stock disponible
     if (newValue > wine.stock) {
       setShowOutOfStockBanner(true);
       setTimeout(() => setShowOutOfStockBanner(false), 3000);
@@ -176,7 +220,6 @@ export default function SellerSales() {
     if (newValue === 0) {
       updateCartQuantity(wineId, 0);
     } else if (current === 0 && change > 0) {
-      // Agregar nuevo item al carrito
       addToCart({
         id: wine.id,
         name: wine.name,
@@ -187,7 +230,6 @@ export default function SellerSales() {
         year: wine.year
       });
     } else {
-      // Actualizar cantidad existente
       updateCartQuantity(wineId, newValue);
     }
   };
@@ -196,7 +238,7 @@ export default function SellerSales() {
   const total = getTotalPrice();
 
   const getAvailableStock = (wineId: number) => {
-    const wine = ALL_WINES.find(w => w.id === wineId);
+    const wine = COMBINED_CATALOG.find(w => w.id === wineId);
     if (!wine) return 0;
     const quantityInCart = getItemQuantity(wineId);
     return wine.stock - quantityInCart;
@@ -248,7 +290,7 @@ export default function SellerSales() {
               onClick={() => totalBottles > 0 && handleGoToPayment()}
               disabled={totalBottles === 0}
               className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-all duration-200 relative disabled:opacity-50"
-            >
+                >
               <ShoppingBag className="w-6 h-6" />
               {totalBottles > 0 && (
                 <motion.span
@@ -276,6 +318,12 @@ export default function SellerSales() {
 
       <main className="flex-1 overflow-y-auto pb-44 scroll-smooth">
         <div className="max-w-7xl mx-auto p-5">
+          {apiError && (
+            <div className="mb-4 p-3 text-xs bg-red-50 text-red-600 rounded-xl border border-red-100">
+              ⚠️ No se pudieron sincronizar las novedades de la base de datos. Mostrando maqueta local.
+            </div>
+          )}
+
           {filteredWines.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Search className="w-16 h-16 text-gray-300 mb-4" />
@@ -286,81 +334,91 @@ export default function SellerSales() {
             <>
               <div className="grid grid-cols-2 gap-4">
                 {visibleWines.map((wine, index) => {
-                const availableStock = getAvailableStock(wine.id);
-                return (
-                <motion.div
-                  key={wine.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    delay: (index % ITEMS_PER_PAGE) * 0.05,
-                    duration: 0.4,
-                    ease: [0.16, 1, 0.3, 1]
-                  }}
-                  whileHover={{ y: -4 }}
-                  className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-100"
-                >
-                  <div className="p-4">
-                    <div
-                      onClick={() => handleWineClick(wine.id)}
-                      className="relative h-44 mb-4 flex items-center justify-center bg-gradient-to-b from-gray-50 to-white rounded-2xl cursor-pointer overflow-hidden"
+                  const availableStock = getAvailableStock(wine.id);
+                  return (
+                    <motion.div
+                      key={wine.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        delay: (index % ITEMS_PER_PAGE) * 0.05,
+                        duration: 0.4,
+                        ease: [0.16, 1, 0.3, 1]
+                      }}
+                      whileHover={{ y: -4 }}
+                      className={`bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border ${
+                        'isDynamic' in wine 
+                          ? 'border-purple-200/60 bg-gradient-to-b from-white to-purple-50/10' 
+                          : 'border-gray-100'
+                      }`}
                     >
-                      {availableStock === 0 ? (
-                        <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl text-xs font-bold shadow-lg backdrop-blur-sm bg-red-500/90 text-white">
-                          Sin stock
+                      <div className="p-4">
+                        <div
+                          onClick={() => handleWineClick(wine.id)}
+                          className="relative h-44 mb-4 flex items-center justify-center bg-gradient-to-b from-gray-50 to-white rounded-2xl cursor-pointer overflow-hidden"
+                        >
+                          {'isDynamic' in wine && (
+                            <span className="absolute top-3 left-3 bg-purple-600 text-white font-bold text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow z-10">
+                              DB Real
+                            </span>
+                          )}
+
+                          {availableStock === 0 ? (
+                            <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl text-xs font-bold shadow-lg backdrop-blur-sm bg-red-500/90 text-white z-10">
+                              Sin stock
+                            </div>
+                          ) : (
+                            <div className={`absolute top-3 right-3 px-3 py-1.5 rounded-xl text-xs font-bold shadow-lg backdrop-blur-sm z-10 ${
+                              availableStock > 5 ? 'bg-green-500/90 text-white' : 'bg-orange-500/90 text-white'
+                            }`}>
+                              {availableStock}
+                            </div>
+                          )}
+                          <img
+                            src={wine.image}
+                            alt={wine.name}
+                            className="h-full w-auto object-contain transition-transform duration-300 hover:scale-105"
+                          />
                         </div>
-                      ) : (
-                        <div className={`absolute top-3 right-3 px-3 py-1.5 rounded-xl text-xs font-bold shadow-lg backdrop-blur-sm ${
-                          availableStock > 5 ? 'bg-green-500/90 text-white' : 'bg-orange-500/90 text-white'
-                        }`}>
-                          {availableStock}
+                        <div
+                          onClick={() => handleWineClick(wine.id)}
+                          className="text-center space-y-1.5 cursor-pointer mb-4"
+                        >
+                          <h3 className="text-sm font-medium text-gray-900 line-clamp-2 min-h-[2.5rem] leading-tight">{wine.name}</h3>
+                          <p className="text-xs text-gray-500 font-medium">{wine.year}</p>
+                          <p className="text-2xl font-bold bg-gradient-to-r from-[#1a0a2e] to-[#2d1548] bg-clip-text text-transparent">
+                            $ {wine.price.toLocaleString()}
+                          </p>
                         </div>
-                      )}
-                      <img
-                        src={wine.image}
-                        alt={wine.name}
-                        className="h-full w-auto object-contain transition-transform duration-300 hover:scale-105"
-                      />
-                    </div>
-                    <div
-                      onClick={() => handleWineClick(wine.id)}
-                      className="text-center space-y-1.5 cursor-pointer mb-4"
-                    >
-                      <h3 className="text-sm font-medium text-gray-900 line-clamp-2 min-h-[2.5rem] leading-tight">{wine.name}</h3>
-                      <p className="text-xs text-gray-500 font-medium">{wine.year}</p>
-                      <p className="text-2xl font-bold bg-gradient-to-r from-[#1a0a2e] to-[#2d1548] bg-clip-text text-transparent">
-                        $ {wine.price.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateQuantity(wine.id, -1);
-                        }}
-                        disabled={getItemQuantity(wine.id) === 0}
-                        className="flex-1 h-11 rounded-2xl bg-gray-100 hover:bg-gray-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
-                      >
-                        <Minus className="w-5 h-5 text-gray-700" />
-                      </button>
-                      <div className="w-14 text-center">
-                        <span className="text-xl font-bold text-gray-900">{getItemQuantity(wine.id)}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateQuantity(wine.id, -1);
+                            }}
+                            disabled={getItemQuantity(wine.id) === 0}
+                            className="flex-1 h-11 rounded-2xl bg-gray-100 hover:bg-gray-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
+                          >
+                            <Minus className="w-5 h-5 text-gray-700" />
+                          </button>
+                          <div className="w-14 text-center">
+                            <span className="text-xl font-bold text-gray-900">{getItemQuantity(wine.id)}</span>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateQuantity(wine.id, 1);
+                            }}
+                            disabled={availableStock === 0}
+                            className="flex-1 h-11 rounded-2xl bg-gradient-to-r from-[#1a0a2e] to-[#2d1548] hover:from-[#2d1548] hover:to-[#1a0a2e] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center text-white shadow-lg"
+                          >
+                            <Plus className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateQuantity(wine.id, 1);
-                        }}
-                        disabled={availableStock === 0}
-                        className="flex-1 h-11 rounded-2xl bg-gradient-to-r from-[#1a0a2e] to-[#2d1548] hover:from-[#2d1548] hover:to-[#1a0a2e] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center text-white shadow-lg"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-              })}
+                    </motion.div>
+                  );
+                })}
               </div>
 
               {hasMore && (
@@ -432,9 +490,7 @@ export default function SellerSales() {
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] border-t border-gray-200">
         <div className="max-w-7xl mx-auto flex px-2">
           <button
-            onClick={() => {
-              setActiveTab('sales');
-            }}
+            onClick={() => setActiveTab('sales')}
             className={`flex-1 py-3 flex flex-col items-center gap-1.5 transition-all duration-200 ${
               activeTab === 'sales' ? 'text-[#1a0a2e]' : 'text-gray-400'
             }`}
