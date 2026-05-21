@@ -1,0 +1,17 @@
+# Dependencias
+node_modules
+.pnpm-store
+
+# Compilación y caché
+dist
+.vite
+.eslintcache
+
+# Variables de entorno locales
+.env
+.env.local
+.env.*.local
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
