@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Banknote, Building2, QrCode } from 'lucide-react';
+import { ArrowLeft, Banknote, Building2, QrCode, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCart } from '../contexts/CartContext';
 import logo from '../../imports/ChatGPT_Image_May_20__2026__12_34_00_PM.png';
@@ -162,7 +162,17 @@ export default function Payment() {
               className="h-10 w-auto"
             />
           </div>
-          <div className="w-10"></div>
+          <button
+            onClick={() => {
+              clearCart();
+              navigate('/seller/sales');
+            }}
+            disabled={isSubmitting}
+            className="w-10 h-10 rounded-xl bg-white/10 hover:bg-red-500/20 text-white transition-all duration-200 flex items-center justify-center backdrop-blur-sm disabled:opacity-50"
+            title="Limpiar y cancelar venta"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
         </div>
       </header>
 
