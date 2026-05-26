@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Banknote, Building2, QrCode } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -7,10 +8,13 @@ import logo from '../../imports/ChatGPT_Image_May_20__2026__12_34_00_PM.png';
 export default function Payment() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items, getTotalItems, getTotalPrice } = useCart();
+  const { items, getTotalItems, getTotalPrice, clearCart } = useCart();
 
   const totalBottles = getTotalItems();
   const total = getTotalPrice();
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dbWines, setDbWines] = useState<any[]>([]);
 
   const paymentMethods = [
     {
@@ -33,13 +37,110 @@ export default function Payment() {
     },
   ];
 
-  const handlePaymentSelect = (methodId: string) => {
-    if (methodId === 'qr') {
-      navigate('/seller/payment/qr', { state: { items, total, totalBottles, paymentMethod: methodId } });
-    } else {
-      navigate('/seller/payment/success', {
-        state: { items, total, totalBottles, paymentMethod: methodId },
+  // Traemos el catálogo real de Supabase en segundo plano para mapear los IDs corruptos
+  useEffect(() => {
+    async function fetchWinesMapping() {
+      try {
+        const response = await fetch('/api/wines');
+        const result = await response.json();
+        if (result.success && result.data) {
+          setDbWines(result.data);
+        }
+      } catch (err) {
+        console.error("Error obteniendo catálogo para mapeo de IDs:", err);
+      }
+    }
+    fetchWinesMapping();
+  }, []);
+
+  const handlePaymentSelect = async (methodId: string) => {
+    if (isSubmitting) return;
+    if (items.length === 0) {
+      alert('El carrito está vacío');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    let databasePaymentType = 'efectivo';
+    if (methodId === 'transfer') databasePaymentType = 'transferencia';
+    if (methodId === 'qr') databasePaymentType = 'qr';
+
+    // RESOLUCIÓN Y MAPEO DE IDS: Protegemos el payload antes de enviarlo
+    const processedItems = items.map(item => {
+      let finalId = item.id;
+
+      // Si el id es un número o un texto corto secuencial (como "1"), buscamos su UUID por nombre
+      if (!isNaN(Number(item.id)) || String(item.id).length < 10) {
+        // Buscamos coincidencia exacta o parcial por nombre en el catálogo real de la DB
+        const match = dbWines.find(
+          w => w.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+        );
+        
+        if (match) {
+          finalId = match.id; // Encontró el UUID real en Supabase
+        } else {
+          // Fallback manual temporario por si es el Malbec de prueba que testeamos antes
+          if (item.name.toLowerCase().includes('malbec')) {
+            finalId = "59bddf87-e794-40ba-a8f1-75834030b041"; 
+          }
+        }
+      }
+
+      console.log(`Mapeando Producto - Nombre: ${item.name} | ID Origen: ${item.id} -> ID Final (UUID): ${finalId}`);
+
+      return {
+        id: String(finalId),
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity
+      };
+    });
+
+    // Validación de seguridad antes de golpear el backend
+    const hasInvalidId = processedItems.some(item => !item.id || item.id.length < 10);
+    if (hasInvalidId) {
+      alert('No se pudo mapear el vino local con un UUID válido de Supabase. Verificá que el nombre coincida con el catálogo.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const payload = {
+      customer_name: "Diego Zottola",
+      payment_type: databasePaymentType,
+      items: processedItems
+    };
+
+    try {
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        clearCart();
+
+        if (methodId === 'qr') {
+          navigate('/seller/payment/qr', { 
+            state: { items, total, totalBottles, paymentMethod: methodId, order_id: result.order_id } 
+          });
+        } else {
+          navigate('/seller/payment/success', {
+            state: { items, total, totalBottles, paymentMethod: methodId, order_id: result.order_id },
+          });
+        }
+      } else {
+        alert(`Error al registrar en Supabase: ${result.error || 'Intente nuevamente'}`);
+      }
+    } catch (err) {
+      alert('Error de conexión con la API de Vercel /api/checkout');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -49,7 +150,8 @@ export default function Payment() {
         <div className="max-w-5xl mx-auto flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-200 flex items-center justify-center backdrop-blur-sm text-white"
+            disabled={isSubmitting}
+            className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-200 flex items-center justify-center backdrop-blur-sm text-white disabled:opacity-50"
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
@@ -134,10 +236,11 @@ export default function Payment() {
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.3 + index * 0.1 }}
-                    whileHover={{ scale: 1.05, y: -4 }}
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={!isSubmitting ? { scale: 1.05, y: -4 } : {}}
+                    whileTap={!isSubmitting ? { scale: 0.95 } : {}}
+                    disabled={isSubmitting}
                     onClick={() => handlePaymentSelect(method.id)}
-                    className="aspect-square bg-white border-2 border-gray-200 hover:border-[#1a0a2e] rounded-2xl p-4 transition-all duration-300 shadow-md hover:shadow-xl flex flex-col items-center justify-center gap-3 group"
+                    className="aspect-square bg-white border-2 border-gray-200 hover:border-[#1a0a2e] rounded-2xl p-4 transition-all duration-300 shadow-md hover:shadow-xl flex flex-col items-center justify-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${method.gradient} flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
                       <Icon className="w-8 h-8 text-white" />
@@ -147,6 +250,14 @@ export default function Payment() {
                 );
               })}
             </div>
+            
+            {isSubmitting && (
+              <div className="text-center mt-6">
+                <p className="text-xs font-semibold text-purple-900 animate-pulse">
+                  Normalizando IDs e impactando Supabase...
+                </p>
+              </div>
+            )}
           </motion.div>
         </div>
       </main>

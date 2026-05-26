@@ -15,16 +15,14 @@ export default async function handler(request: Request) {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  // Intentar leer de process.env o del entorno global directo de Edge
-  const supabaseUrl = process.env.SUPABASE_URL || Deno.env.get('SUPABASE_URL');
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || Deno.env.get('SUPABASE_ANON_KEY');
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-  // Si siguen faltando en producción, devolvemos el error estructurado
   if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: 'Las credenciales no fueron inyectadas correctamente en Vercel.',
+        error: 'Las credenciales de Supabase no están configuradas.',
         data: [] 
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -32,7 +30,13 @@ export default async function handler(request: Request) {
   }
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    // CAMBIO CRÍTICO: Se añade la configuración de auth para bypass de validaciones de sesión
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
     
     const { data: wines, error } = await supabase
       .from('wines')
@@ -51,11 +55,13 @@ export default async function handler(request: Request) {
     );
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
     return new Response(
       JSON.stringify({
         success: false,
-        error: 'Error de conexión con la tabla de Supabase',
-        details: error instanceof Error ? error.message : String(error),
+        error: 'Error de conexión con Supabase',
+        details: errorMessage,
         data: []
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

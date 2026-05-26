@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wine, ShoppingBag, MessageCircle, User, Plus, Minus, Search, Menu, Home, MoreHorizontal, Send } from 'lucide-react';
+import { Wine, ShoppingBag, MessageCircle, User, Plus, Minus, Search, Menu, Home, MoreHorizontal, Send, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from '../contexts/CartContext';
+import logo from '../../imports/ChatGPT_Image_May_20__2026__12_34_00_PM.png';
+
+// Importaciones de imágenes locales para fallback de la maqueta
 import img1 from '../../imports/image-2.png';
 import img2 from '../../imports/image-4.png';
 import img3 from '../../imports/image-6.png';
@@ -12,7 +15,6 @@ import img6 from '../../imports/image-3.png';
 import img7 from '../../imports/image-1.png';
 import img8 from '../../imports/image-7.png';
 import img9 from '../../imports/image-2.png';
-import logo from '../../imports/ChatGPT_Image_May_20__2026__12_34_00_PM.png';
 
 interface DBWine {
   id: string;
@@ -27,9 +29,10 @@ interface DBWine {
   image_url: string;
 }
 
+// Catálogo local con IDs tipo string para no colisionar con los UUIDs de la DB
 const ALL_WINES = [
   {
-    id: 1,
+    id: 'mock-1',
     name: 'Reserva Malbec',
     year: 2023,
     category: 'Vino Tinto',
@@ -38,7 +41,7 @@ const ALL_WINES = [
     image: img1,
   },
   {
-    id: 2,
+    id: 'mock-2',
     name: 'Cabernet Sauvignon',
     year: 2022,
     category: 'Vino Tinto',
@@ -47,7 +50,7 @@ const ALL_WINES = [
     image: img2,
   },
   {
-    id: 3,
+    id: 'mock-3',
     name: 'Malbec Roble',
     year: 2023,
     category: 'Vino Tinto',
@@ -56,7 +59,7 @@ const ALL_WINES = [
     image: img3,
   },
   {
-    id: 4,
+    id: 'mock-4',
     name: 'Gran Blend',
     year: 2022,
     category: 'Vino Tinto',
@@ -65,7 +68,7 @@ const ALL_WINES = [
     image: img4,
   },
   {
-    id: 5,
+    id: 'mock-5',
     name: 'Chardonnay',
     year: 2023,
     category: 'Vino Blanco',
@@ -74,7 +77,7 @@ const ALL_WINES = [
     image: img5,
   },
   {
-    id: 6,
+    id: 'mock-6',
     name: 'Rosé de Malbec',
     year: 2023,
     category: 'Vino Rosado',
@@ -83,7 +86,7 @@ const ALL_WINES = [
     image: img6,
   },
   {
-    id: 7,
+    id: 'mock-7',
     name: 'Syrah Reserva',
     year: 2022,
     category: 'Vino Tinto',
@@ -92,7 +95,7 @@ const ALL_WINES = [
     image: img7,
   },
   {
-    id: 8,
+    id: 'mock-8',
     name: 'Torrontés',
     year: 2023,
     category: 'Vino Blanco',
@@ -101,7 +104,7 @@ const ALL_WINES = [
     image: img8,
   },
   {
-    id: 9,
+    id: 'mock-9',
     name: 'Pinot Noir',
     year: 2022,
     category: 'Vino Tinto',
@@ -115,7 +118,15 @@ const ITEMS_PER_PAGE = 4;
 
 export default function SellerSales() {
   const navigate = useNavigate();
-  const { items, addToCart, updateQuantity: updateCartQuantity, getItemQuantity, getTotalItems, getTotalPrice } = useCart();
+  const { 
+    items, 
+    addToCart, 
+    updateQuantity: updateCartQuantity, 
+    getItemQuantity, 
+    getTotalItems, 
+    getTotalPrice,
+    clearCart 
+  } = useCart();
   const [activeTab, setActiveTab] = useState('sales');
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   const [isLoading, setIsLoading] = useState(false);
@@ -126,6 +137,7 @@ export default function SellerSales() {
   const [dbWines, setDbWines] = useState<DBWine[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Cargamos el catálogo en tiempo real con el stock legítimo de Supabase
   useEffect(() => {
     const loadWinesFromDB = async () => {
       try {
@@ -148,14 +160,14 @@ export default function SellerSales() {
     setVisibleCount(ITEMS_PER_PAGE);
   }, [searchQuery]);
 
-  // Convertimos los IDs de la DB a números correlativos altos (ej: 100, 101...) para no romper useCart
-  const formattedDBWines = dbWines.map((wine, index) => ({
-    id: 100 + index, 
+  // Sincronizamos las propiedades inyectando el valor de 'stock' real que viene de Supabase
+  const formattedDBWines = dbWines.map((wine) => ({
+    id: wine.id, 
     name: wine.name,
     year: 2026, 
     category: wine.type,
     price: Number(wine.price),
-    stock: wine.stock,
+    stock: Number(wine.stock), // CAMBIO: Sincronización directa del stock real de DB
     image: wine.image_url || img1, 
     isDynamic: true, 
   }));
@@ -202,7 +214,8 @@ export default function SellerSales() {
     };
   }, [hasMore, isLoading, filteredWines.length]);
 
-  const updateQuantity = (wineId: number, change: number) => {
+  // Ajuste de firma: wineId ahora se procesa limpiamente como string
+  const updateQuantity = (wineId: string, change: number) => {
     const wine = COMBINED_CATALOG.find(w => w.id === wineId);
     if (!wine) return;
 
@@ -211,6 +224,7 @@ export default function SellerSales() {
 
     if (newValue < 0) return;
 
+    // Validación estricta contra el stock dinámico de Supabase
     if (newValue > wine.stock) {
       setShowOutOfStockBanner(true);
       setTimeout(() => setShowOutOfStockBanner(false), 3000);
@@ -237,14 +251,15 @@ export default function SellerSales() {
   const totalBottles = getTotalItems();
   const total = getTotalPrice();
 
-  const getAvailableStock = (wineId: number) => {
+  // Ajuste de firma a string para validar contra el inventario real
+  const getAvailableStock = (wineId: string) => {
     const wine = COMBINED_CATALOG.find(w => w.id === wineId);
     if (!wine) return 0;
     const quantityInCart = getItemQuantity(wineId);
     return wine.stock - quantityInCart;
   };
 
-  const handleWineClick = (wineId: number) => {
+  const handleWineClick = (wineId: string) => {
     navigate(`/seller/wine/${wineId}`);
   };
 
@@ -254,7 +269,6 @@ export default function SellerSales() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-gray-50 to-gray-100 flex flex-col">
-      {/* Out of Stock Banner */}
       <AnimatePresence>
         {showOutOfStockBanner && (
           <motion.div
@@ -290,7 +304,7 @@ export default function SellerSales() {
               onClick={() => totalBottles > 0 && handleGoToPayment()}
               disabled={totalBottles === 0}
               className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-all duration-200 relative disabled:opacity-50"
-                >
+            >
               <ShoppingBag className="w-6 h-6" />
               {totalBottles > 0 && (
                 <motion.span
@@ -453,7 +467,6 @@ export default function SellerSales() {
         </div>
       </main>
 
-      {/* Floating Summary Bar */}
       <AnimatePresence>
         {totalBottles > 0 && (
           <motion.div
@@ -474,19 +487,27 @@ export default function SellerSales() {
                   <p className="text-white text-2xl font-bold">$ {total.toLocaleString()}</p>
                 </div>
               </div>
-              <button
-                onClick={handleGoToPayment}
-                className="w-full py-4 bg-white hover:bg-gray-100 rounded-2xl text-[#1a0a2e] font-bold text-base transition-all duration-200 active:scale-98 shadow-lg flex items-center justify-center gap-2"
-              >
-                Ir a Pagar
-                <Send className="w-5 h-5" />
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => clearCart()}
+                  className="px-4 py-4 bg-white/10 hover:bg-red-500/20 border border-white/20 rounded-2xl text-white transition-all duration-200 active:scale-95 flex items-center justify-center"
+                  title="Limpiar carrito"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleGoToPayment}
+                  className="flex-1 py-4 bg-white hover:bg-gray-100 rounded-2xl text-[#1a0a2e] font-bold text-base transition-all duration-200 active:scale-98 shadow-lg flex items-center justify-center gap-2"
+                >
+                  Ir a Pagar
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] border-t border-gray-200">
         <div className="max-w-7xl mx-auto flex px-2">
           <button
