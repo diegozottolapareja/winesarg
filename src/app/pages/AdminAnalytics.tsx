@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, TrendingDown, Wine, Package, Users, DollarSign } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Wine, Package, Users, DollarSign, ExternalLink } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   LineChart,
@@ -133,7 +133,25 @@ export default function AdminAnalytics() {
           transition={{ delay: 0.4 }}
           className="bg-white rounded-2xl p-6 md:p-8 border border-border mb-6"
         >
-          <h2 className="text-xl md:text-2xl text-dark-graphite mb-6">Ventas por Día</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl md:text-2xl text-dark-graphite">Ventas por Día</h2>
+            <span className="text-[10px] font-bold text-wine-purple border border-wine-purple/20 px-2 py-0.5 rounded-full uppercase tracking-tighter">BI Embed</span>
+          </div>
+
+          {/* Embed de Looker Studio para visualización interactiva de ventas diarias */}
+          <div className="w-full aspect-[16/9] md:aspect-[21/9] rounded-xl overflow-hidden border border-gray-100 shadow-inner bg-gray-50 mb-8">
+            <iframe
+              src="https://datastudio.google.com/embed/reporting/8ea1e43d-f444-4fff-b8dd-a8855bf6f13e/page/p_9ciz9yx13d"
+              className="w-full h-full border-0"
+              allowFullScreen
+              sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            ></iframe>
+          </div>
+
+          <div className="border-t border-gray-50 pt-6">
+            <p className="text-[10px] text-muted-foreground mb-4 uppercase tracking-widest font-bold">Gráfico de Respaldo Local</p>
+          </div>
+
           <div className="h-80 md:h-96">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={salesData}>
@@ -158,6 +176,34 @@ export default function AdminAnalytics() {
                 />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        </motion.div>
+
+        {/* Dashboard Embebido de Looker Studio */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="bg-white rounded-2xl p-6 md:p-8 border border-border mb-6"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl md:text-2xl text-dark-graphite font-bold">Monitor de BI Externo</h2>
+            <a 
+              href="https://datastudio.google.com/s/lcY_1sbNHg8#cd-ax0b39t13d" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-wine-purple hover:text-wine-burgundy transition-colors text-sm font-medium"
+            >
+              Ver pantalla completa <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+          <div className="w-full aspect-video rounded-xl overflow-hidden border border-gray-100 shadow-inner bg-gray-50">
+            <iframe
+              src="https://datastudio.google.com/embed/reporting/8ea1e43d-f444-4fff-b8dd-a8855bf6f13e/page/TlJ0C" // Reemplaza con el enlace correcto
+              className="w-full h-full border-0"
+              allowFullScreen
+              sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            ></iframe>
           </div>
         </motion.div>
 

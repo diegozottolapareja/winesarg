@@ -78,9 +78,7 @@ export default function AdminDashboard() {
 
   const quickStats = [
     {
-      label: 'Ventas Hoy',
-      value: '$45.200',
-      change: '+12,5%',
+      embedUrl: 'https://datastudio.google.com/embed/reporting/8ea1e43d-f444-4fff-b8dd-a8855bf6f13e/page/p_1njjv6u13d', // Pegá acá el URL de inserción de tu KPI
       icon: TrendingUp,
       positive: true,
     },
@@ -162,7 +160,24 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-                <p className="text-2xl md:text-3xl text-dark-graphite mb-1">{stat.value}</p>
+                
+                {stat.embedUrl ? (
+                  <div className="h-10 md:h-12 w-full overflow-hidden rounded-lg mb-1 relative">
+                    <iframe
+                      src={stat.embedUrl}
+                      className="absolute inset-0 w-full h-full border-0 pointer-events-none"
+                      title={stat.label}
+                      scrolling="no"
+                    />
+                    {/* Capa invisible para evitar clics accidentales que muevan el iframe */}
+                    <div className="absolute inset-0 z-10 cursor-default" />
+                  </div>
+                ) : (
+                  <p className="text-2xl md:text-3xl text-dark-graphite mb-1">
+                    {stat.value}
+                  </p>
+                )}
+
                 <p
                   className={`text-xs ${
                     stat.positive ? 'text-success' : 'text-orange-600'

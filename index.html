@@ -4,8 +4,25 @@
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Make pages responsive</title>
-      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+      <meta name="theme-color" content="#1a0a2e" /> <!-- Color de la barra de estado -->
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      
+      <!-- Iconos con fondo blanco -->
+      <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
+      <style>
+        :root { background-color: #ffffff; } /* Para el Splash Screen */
+        html, body {
+          height: 100%; 
+          margin: 0; 
+          background-color: #1a0a2e; /* Fondo real de la app */
+          color: white;
+        } 
+        #root { height: 100%; }
+      </style>
+      <title>Wines ARG</title>
     </head>
 
     <body>
