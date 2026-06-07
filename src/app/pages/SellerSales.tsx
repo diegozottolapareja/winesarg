@@ -330,7 +330,7 @@ export default function SellerSales() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-44 scroll-smooth">
+      <main className={`flex-1 overflow-y-auto scroll-smooth ${totalBottles > 0 ? 'pb-72' : 'pb-24'}`}>
         <div className="max-w-7xl mx-auto p-5">
           {apiError && (
             <div className="mb-4 p-3 text-xs bg-red-50 text-red-600 rounded-xl border border-red-100">

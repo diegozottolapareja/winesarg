@@ -66,76 +66,71 @@ export default function Payment() {
     if (methodId === 'transfer') databasePaymentType = 'transferencia';
     if (methodId === 'qr') databasePaymentType = 'qr';
 
+    const isMockId = (id: string) => id.startsWith('mock-') || (!isNaN(Number(id)) && id.length < 10);
+
     // RESOLUCIÓN Y MAPEO DE IDS: Protegemos el payload antes de enviarlo
-    const processedItems = items.map(item => {
-      let finalId = item.id;
+    const processedItems = items
+      .filter(item => !isMockId(String(item.id)))
+      .map(item => {
+        let finalId = item.id;
 
-      // Si el id es un número o un texto corto secuencial (como "1"), buscamos su UUID por nombre
-      if (!isNaN(Number(item.id)) || String(item.id).length < 10) {
-        // Buscamos coincidencia exacta o parcial por nombre en el catálogo real de la DB
-        const match = dbWines.find(
-          w => w.name.toLowerCase().trim() === item.name.toLowerCase().trim()
-        );
-        
-        if (match) {
-          finalId = match.id; // Encontró el UUID real en Supabase
-        } else {
-          // Fallback manual temporario por si es el Malbec de prueba que testeamos antes
-          if (item.name.toLowerCase().includes('malbec')) {
-            finalId = "59bddf87-e794-40ba-a8f1-75834030b041"; 
-          }
+        if (String(item.id).length < 10) {
+          const match = dbWines.find(
+            w => w.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+          );
+          if (match) finalId = match.id;
         }
-      }
 
-      console.log(`Mapeando Producto - Nombre: ${item.name} | ID Origen: ${item.id} -> ID Final (UUID): ${finalId}`);
+        console.log(`Mapeando Producto - Nombre: ${item.name} | ID Origen: ${item.id} -> ID Final (UUID): ${finalId}`);
 
-      return {
-        id: String(finalId),
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity
-      };
-    });
-
-    // Validación de seguridad antes de golpear el backend
-    const hasInvalidId = processedItems.some(item => !item.id || item.id.length < 10);
-    if (hasInvalidId) {
-      alert('No se pudo mapear el vino local con un UUID válido de Supabase. Verificá que el nombre coincida con el catálogo.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    const payload = {
-      customer_name: "Diego Zottola",
-      payment_type: databasePaymentType,
-      items: processedItems
-    };
-
-    try {
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        return {
+          id: String(finalId),
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity
+        };
       });
 
-      const result = await response.json();
+    const realItems = processedItems.filter(item => item.id && item.id.length >= 10);
+    const onlyMocks = realItems.length === 0;
 
-      if (response.ok && result.success) {
-        clearCart();
+    try {
+      let order_id: string | undefined;
 
-        if (methodId === 'qr') {
-          navigate('/seller/payment/qr', { 
-            state: { items, total, totalBottles, paymentMethod: methodId, order_id: result.order_id } 
-          });
-        } else {
-          navigate('/seller/payment/success', {
-            state: { items, total, totalBottles, paymentMethod: methodId, order_id: result.order_id },
-          });
+      if (!onlyMocks) {
+        const payload = {
+          customer_name: "Diego Zottola",
+          payment_type: databasePaymentType,
+          items: realItems
+        };
+
+        const response = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          alert(`Error al registrar en Supabase: ${result.error || 'Intente nuevamente'}`);
+          setIsSubmitting(false);
+          return;
         }
+
+        order_id = result.order_id;
+      }
+
+      clearCart();
+
+      if (methodId === 'qr') {
+        navigate('/seller/payment/qr', {
+          state: { items, total, totalBottles, paymentMethod: methodId, order_id }
+        });
       } else {
-        alert(`Error al registrar en Supabase: ${result.error || 'Intente nuevamente'}`);
+        navigate('/seller/payment/success', {
+          state: { items, total, totalBottles, paymentMethod: methodId, order_id },
+        });
       }
     } catch (err) {
       alert('Error de conexión con la API de Vercel /api/checkout');
